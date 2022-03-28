@@ -315,9 +315,7 @@ func parseQuery(q string) (*query, error) {
 			return nil, fmt.Errorf("Expected valid key, got [%s]: `%s`", err, q[nextIndex:])
 		}
 
-		// Expect =, eventually some other operator
 		if q[nextIndex] != ':' {
-			// TODO: return an error
 			return nil, fmt.Errorf("Expected colon at %d, got: `%s`", nextIndex, q[nextIndex:])
 		}
 		i = nextIndex + 1
@@ -435,7 +433,8 @@ func (s server) searchDocuments(w http.ResponseWriter, r *http.Request, ps httpr
 		iter := s.db.NewIter(nil)
 		defer iter.Close()
 		for iter.First(); iter.Valid(); iter.Next() {
-			document, err := s.getDocumentById(iter.Key())
+			var document map[string]any
+			err = json.Unmarshal(iter.Value(), &document)
 			if err != nil {
 				jsonResponse(w, nil, err)
 				return
