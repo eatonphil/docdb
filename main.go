@@ -1,24 +1,24 @@
 package main
 
 import (
-	"net/http"
-	"log"
-	"fmt"
-	"strings"
 	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"strings"
 	"unicode"
 
-	"github.com/google/uuid"
 	"github.com/cockroachdb/pebble"
+	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 )
 
 func jsonResponse(w http.ResponseWriter, body map[string]any, err error) {
 	data := map[string]any{
-		"body": body,
+		"body":   body,
 		"status": "ok",
 	}
-	
+
 	if err == nil {
 		w.WriteHeader(http.StatusOK)
 	} else {
@@ -37,7 +37,7 @@ func jsonResponse(w http.ResponseWriter, body map[string]any, err error) {
 }
 
 type server struct {
-	db *pebble.DB // File location where data should be stored
+	db   *pebble.DB // File location where data should be stored
 	port string
 }
 
@@ -77,7 +77,7 @@ func (s server) addDocument(w http.ResponseWriter, r *http.Request, ps httproute
 }
 
 type queryEquals struct {
-	key []string
+	key   []string
 	value string
 }
 
@@ -143,7 +143,7 @@ func lexString(input []rune, index int) (string, int, error) {
 			return "", index, fmt.Errorf("Expected end of quoted string")
 		}
 
-		return string(s), index+1, nil
+		return string(s), index + 1, nil
 	}
 
 	// If unquoted, read as much contiguous digits/letters as there are
@@ -239,7 +239,7 @@ func (s server) searchDocuments(w http.ResponseWriter, r *http.Request, ps httpr
 
 		if q.match(document) {
 			documents = append(documents, map[string]any{
-				"id": string(iter.Key()),
+				"id":   string(iter.Key()),
 				"body": document,
 			})
 		}

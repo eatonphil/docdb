@@ -1,18 +1,18 @@
 package main
 
 import (
-	"testing"
 	"fmt"
+	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func Test_getPath(t *testing.T) {
-	tests := []struct{
-		object map[string]any
-		path []string
+	tests := []struct {
+		object        map[string]any
+		path          []string
 		expectedValue any
-		expectedOk bool
+		expectedOk    bool
 	}{
 		{
 			map[string]any{
@@ -44,12 +44,12 @@ func Test_getPath(t *testing.T) {
 }
 
 func Test_lexString(t *testing.T) {
-	tests := []struct{
-		input string
-		index int
+	tests := []struct {
+		input          string
+		index          int
 		expectedString string
-		expectedIndex int
-		expectedErr error
+		expectedIndex  int
+		expectedErr    error
 	}{
 		{
 			"a.b:c",
@@ -90,21 +90,21 @@ func Test_lexString(t *testing.T) {
 }
 
 func Test_parseQuery(t *testing.T) {
-	tests := []struct{
-		q string
+	tests := []struct {
+		q             string
 		expectedQuery query
-		expectedErr error
+		expectedErr   error
 	}{
 		{
 			"a.b:1 c:2",
 			query{
 				[]queryEquals{
-					queryEquals{
-						key: []string{"a", "b"},
+					{
+						key:   []string{"a", "b"},
 						value: "1",
 					},
-					queryEquals{
-						key: []string{"c"},
+					{
+						key:   []string{"c"},
 						value: "2",
 					},
 				},
@@ -115,8 +115,8 @@ func Test_parseQuery(t *testing.T) {
 			"a:1",
 			query{
 				[]queryEquals{
-					queryEquals{
-						key: []string{"a"},
+					{
+						key:   []string{"a"},
 						value: "1",
 					},
 				},
@@ -127,8 +127,8 @@ func Test_parseQuery(t *testing.T) {
 			`" a ":" n "`,
 			query{
 				[]queryEquals{
-					queryEquals{
-						key: []string{" a "},
+					{
+						key:   []string{" a "},
 						value: " n ",
 					},
 				},
