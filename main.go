@@ -456,21 +456,7 @@ func (s server) searchDocuments(w http.ResponseWriter, r *http.Request, ps httpr
 func (s server) getDocument(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	id := ps.ByName("id")
 
-	val, closer, err := s.db.Get([]byte(id))
-	if err != nil {
-		jsonResponse(w, nil, err)
-		return
-	}
-
-	var document map[string]any
-	err = json.Unmarshal(val, &document)
-	if err != nil {
-		jsonResponse(w, nil, err)
-		return
-	}
-
-	// Don't forget this apparently!
-	err = closer.Close()
+	document, err := s.getDocumentById([]byte(id))
 	if err != nil {
 		jsonResponse(w, nil, err)
 		return
