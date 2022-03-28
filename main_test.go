@@ -151,3 +151,28 @@ func Test_parseQuery(t *testing.T) {
 		assert.Equal(t, test.expectedErr, err)
 	}
 }
+
+func Test_getPathValues(t *testing.T) {
+	tests := []struct {
+		obj         map[string]any
+		prefix      string
+		expectedPvs []string
+	}{
+		{
+			map[string]any{"a": 2, "b": 4, "c": "hey im here"},
+			"",
+			[]string{"a=2", "b=4", "c=hey im here"},
+		},
+		{
+			map[string]any{"a": map[string]any{"12": "19"}},
+			"",
+			[]string{"a.12=19"},
+		},
+	}
+
+	for _, test := range tests {
+		pvs := getPathValues(test.obj, test.prefix)
+		assert.Equal(t, len(pvs), len(test.expectedPvs))
+		assert.Equal(t, pvs, test.expectedPvs)
+	}
+}
