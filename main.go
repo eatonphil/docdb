@@ -355,10 +355,12 @@ func (s server) getDocumentById(id []byte) (map[string]any, error) {
 
 func (s server) lookup(pathValue string) ([]string, error) {
 	idsString, closer, err := s.indexDb.Get([]byte(pathValue))
-	if err != nil {
+	if err != nil && err != pebble.ErrNotFound {
 		return nil, fmt.Errorf("Could not look up pathvalue [%#v]: %s", pathValue, err)
 	}
-	defer closer.Close()
+	if closer != nil {
+		defer closer.Close()
+	}
 
 	if len(idsString) == 0 {
 		return nil, nil
