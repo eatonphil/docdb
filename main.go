@@ -486,7 +486,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	//s.reindex()
+	s.reindex()
 
 	router := httprouter.New()
 	router.POST("/docs", s.addDocument)
