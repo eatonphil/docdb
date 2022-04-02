@@ -322,8 +322,8 @@ func parseQuery(q string) (*query, error) {
 
 		op := "="
 		if q[i] == '>' || q[i] == '<' {
-			i++
 			op = string(q[i])
+			i++
 		}
 
 		value, nextIndex, err := lexString(qRune, i)

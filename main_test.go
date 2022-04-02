@@ -96,28 +96,31 @@ func Test_parseQuery(t *testing.T) {
 		expectedErr   error
 	}{
 		{
-			"a.b:1 c:2",
+			"a.b:1 c:>2",
 			query{
-				[]queryEquals{
+				[]queryComparison{
 					{
 						key:   []string{"a", "b"},
 						value: "1",
+						op: "=",
 					},
 					{
 						key:   []string{"c"},
 						value: "2",
+						op: ">",
 					},
 				},
 			},
 			nil,
 		},
 		{
-			"a:1",
+			"a:<1",
 			query{
-				[]queryEquals{
+				[]queryComparison{
 					{
 						key:   []string{"a"},
 						value: "1",
+						op: "<",
 					},
 				},
 			},
@@ -126,10 +129,11 @@ func Test_parseQuery(t *testing.T) {
 		{
 			`" a ":" n "`,
 			query{
-				[]queryEquals{
+				[]queryComparison{
 					{
 						key:   []string{" a "},
 						value: " n ",
+						op: "=",
 					},
 				},
 			},
