@@ -409,7 +409,6 @@ func (s server) searchDocuments(w http.ResponseWriter, r *http.Request, ps httpr
 		idsInAll = nil
 	}
 	if len(idsInAll) > 0 {
-		log.Println("Found index")
 		for _, id := range idsInAll {
 			document, err := s.getDocumentById(id)
 			if err != nil {
