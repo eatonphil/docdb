@@ -427,9 +427,6 @@ func (s server) searchDocuments(w http.ResponseWriter, r *http.Request, ps httpr
 			}
 		}
 	} else {
-		// I don't think it's possible for data to fall out of the
-		// index and be found in a linear scan while there is only one
-		// filter operator: equality.
 		iter := s.db.NewIter(nil)
 		defer iter.Close()
 		for iter.First(); iter.Valid(); iter.Next() {
@@ -466,12 +463,27 @@ func (s server) getDocument(w http.ResponseWriter, r *http.Request, ps httproute
 	}, nil)
 }
 
+func (s server) reindex() {
+	iter := s.db.NewIter(nil)
+	defer iter.Close()
+	for iter.First(); iter.Valid(); iter.Next() {
+		var document map[string]any
+		err := json.Unmarshal(iter.Value(), &document)
+		if err != nil {
+			log.Printf("Unable to parse bad document, %s: %s", string(iter.Key()), err)
+		}
+		s.index(string(iter.Key()), document)
+	}
+}
+
 func main() {
 	s, err := newServer("docdb.data", "8080")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer s.db.Close()
+
+	s.reindex()
 
 	router := httprouter.New()
 	router.POST("/docs", s.addDocument)
