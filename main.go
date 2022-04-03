@@ -1,15 +1,18 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
+	"path"
 	"strconv"
 	"strings"
 	"unicode"
 
-	"github.com/cockroachdb/pebble"
 	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 )
@@ -38,20 +41,19 @@ func jsonResponse(w http.ResponseWriter, body map[string]any, err error) {
 }
 
 type server struct {
-	db      *pebble.DB // Primary data
-	indexDb *pebble.DB // Index data
-	port    string
+	dbDir      string // Primary data
+	indexDbDir string // Index data
+	port       string
 }
 
 func newServer(database string, port string) (*server, error) {
-	s := server{db: nil, port: port}
-	var err error
-	s.db, err = pebble.Open(database, &pebble.Options{})
+	s := server{dbDir: database, indexDbDir: database + ".index", port: port}
+	err := os.MkdirAll(s.dbDir, os.ModePerm)
 	if err != nil {
 		return nil, err
 	}
 
-	s.indexDb, err = pebble.Open(database+".index", &pebble.Options{})
+	err = os.MkdirAll(s.indexDbDir, os.ModePerm)
 	return &s, err
 }
 
@@ -78,12 +80,17 @@ func getPathValues(obj map[string]any, prefix string) []string {
 	return pvs
 }
 
+func encodeIndex(pv string) string {
+	pathValueB64 := base64.StdEncoding.EncodeToString([]byte(pv))
+	return strings.ReplaceAll(pathValueB64, "/", "")
+}
+
 func (s server) index(id string, document map[string]any) {
 	pv := getPathValues(document, "")
 
 	for _, pathValue := range pv {
-		idsString, closer, err := s.indexDb.Get([]byte(pathValue))
-		if err != nil && err != pebble.ErrNotFound {
+		idsString, err := ioutil.ReadFile(path.Join(s.indexDbDir, encodeIndex(pathValue)))
+		if err != nil && !strings.HasSuffix(err.Error(), ": no such file or directory") {
 			log.Printf("Could not look up pathvalue [%#v]: %s", document, err)
 		}
 
@@ -104,13 +111,7 @@ func (s server) index(id string, document map[string]any) {
 			}
 		}
 
-		if closer != nil {
-			err = closer.Close()
-			if err != nil {
-				log.Printf("Could not close: %s", err)
-			}
-		}
-		err = s.indexDb.Set([]byte(pathValue), idsString, pebble.Sync)
+		err = ioutil.WriteFile(path.Join(s.indexDbDir, encodeIndex(pathValue)), idsString, os.ModePerm)
 		if err != nil {
 			log.Printf("Could not update index: %s", err)
 		}
@@ -136,7 +137,7 @@ func (s server) addDocument(w http.ResponseWriter, r *http.Request, ps httproute
 		jsonResponse(w, nil, err)
 		return
 	}
-	err = s.db.Set([]byte(id), bs, pebble.Sync)
+	err = ioutil.WriteFile(path.Join(s.dbDir, id), bs, os.ModePerm)
 	if err != nil {
 		jsonResponse(w, nil, err)
 		return
@@ -339,12 +340,11 @@ func parseQuery(q string) (*query, error) {
 	return &parsed, nil
 }
 
-func (s server) getDocumentById(id []byte) (map[string]any, error) {
-	valBytes, closer, err := s.db.Get(id)
+func (s server) getDocumentById(id string) (map[string]any, error) {
+	valBytes, err := ioutil.ReadFile(path.Join(s.dbDir, id))
 	if err != nil {
 		return nil, err
 	}
-	defer closer.Close()
 
 	var document map[string]any
 	err = json.Unmarshal(valBytes, &document)
@@ -352,12 +352,9 @@ func (s server) getDocumentById(id []byte) (map[string]any, error) {
 }
 
 func (s server) lookup(pathValue string) ([]string, error) {
-	idsString, closer, err := s.indexDb.Get([]byte(pathValue))
-	if err != nil && err != pebble.ErrNotFound {
+	idsString, err := ioutil.ReadFile(path.Join(s.indexDbDir, encodeIndex(pathValue)))
+	if err != nil && !strings.HasSuffix(err.Error(), ": no such file or directory") {
 		return nil, fmt.Errorf("Could not look up pathvalue [%#v]: %s", pathValue, err)
-	}
-	if closer != nil {
-		defer closer.Close()
 	}
 
 	if len(idsString) == 0 {
@@ -413,7 +410,7 @@ func (s server) searchDocuments(w http.ResponseWriter, r *http.Request, ps httpr
 	}
 	if len(idsInAll) > 0 {
 		for _, id := range idsInAll {
-			document, err := s.getDocumentById([]byte(id))
+			document, err := s.getDocumentById(id)
 			if err != nil {
 				jsonResponse(w, nil, err)
 				return
@@ -427,11 +424,14 @@ func (s server) searchDocuments(w http.ResponseWriter, r *http.Request, ps httpr
 			}
 		}
 	} else {
-		iter := s.db.NewIter(nil)
-		defer iter.Close()
-		for iter.First(); iter.Valid(); iter.Next() {
-			var document map[string]any
-			err = json.Unmarshal(iter.Value(), &document)
+		files, err := ioutil.ReadDir(s.dbDir)
+		if err != nil {
+			jsonResponse(w, nil, err)
+			return
+		}
+
+		for _, f := range files {
+			document, err := s.getDocumentById(f.Name())
 			if err != nil {
 				jsonResponse(w, nil, err)
 				return
@@ -439,7 +439,7 @@ func (s server) searchDocuments(w http.ResponseWriter, r *http.Request, ps httpr
 
 			if q.match(document) {
 				documents = append(documents, map[string]any{
-					"id":   string(iter.Key()),
+					"id":   f.Name(),
 					"body": document,
 				})
 			}
@@ -452,7 +452,7 @@ func (s server) searchDocuments(w http.ResponseWriter, r *http.Request, ps httpr
 func (s server) getDocument(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	id := ps.ByName("id")
 
-	document, err := s.getDocumentById([]byte(id))
+	document, err := s.getDocumentById(id)
 	if err != nil {
 		jsonResponse(w, nil, err)
 		return
@@ -464,15 +464,19 @@ func (s server) getDocument(w http.ResponseWriter, r *http.Request, ps httproute
 }
 
 func (s server) reindex() {
-	iter := s.db.NewIter(nil)
-	defer iter.Close()
-	for iter.First(); iter.Valid(); iter.Next() {
-		var document map[string]any
-		err := json.Unmarshal(iter.Value(), &document)
+	files, err := ioutil.ReadDir(s.dbDir)
+	if err != nil {
+		log.Printf("Unable to walk database directory, %s: %s", string(s.dbDir), err)
+		return
+	}
+
+	for _, f := range files {
+		document, err := s.getDocumentById(f.Name())
 		if err != nil {
-			log.Printf("Unable to parse bad document, %s: %s", string(iter.Key()), err)
+			log.Printf("Unable to parse bad document, %s: %s", string(f.Name()), err)
+			return
 		}
-		s.index(string(iter.Key()), document)
+		s.index(f.Name(), document)
 	}
 }
 
@@ -481,7 +485,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer s.db.Close()
 
 	s.reindex()
 
